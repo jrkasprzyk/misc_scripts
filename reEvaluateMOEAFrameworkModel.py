@@ -1,19 +1,18 @@
-/*
-Copyright (C) 2013 Joseph Kasprzyk, Matthew Woodruff and others.
+#Copyright (C) 2013 Joseph Kasprzyk, Matthew Woodruff and others.
 
-This script is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+#This script is free software: you can redistribute it and/or modify
+#it under the terms of the GNU Lesser General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
 
-This script is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+#This script is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU Lesser General Public License for more details.
 
-You should have received a copy of the GNU Lesser General Public License
-along with this script.  If not, see <http://www.gnu.org/licenses/>.
-*/
+#You should have received a copy of the GNU Lesser General Public License
+#along with this script.  If not, see <http://www.gnu.org/licenses/>.
+
 
 import re
 import os
@@ -23,9 +22,28 @@ from subprocess import Popen
 from subprocess import PIPE
 
 LINE_BUFFERED = 1
+
+def cli():
+    if len(sys.argv) != 3:
+        sys.stderr.write("Arguments: problem, seed\n")
+        sys.exit()
+    args = {}
+    args["problem"] = sys.argv[1]
+    args["seed"] = sys.argv[2] 
+    return args
         
 def main():
 
+    #Two command line arguments are the problem and the seed.  Each of the lower
+    #dimensional problems is being re-evaluated with the AllDecAll objectives.
+    args = cli()
+    problem = args["problem"]
+    seed = args["seed"]
+    
+    #Input and output filenames.
+    inputFilename = problem + '_s' + seed + '.noDV.txt'
+    outputFilename = problem + '_s' + seed + '.noDV.re-evaluated.txt'
+    
     #Define the command that you would like to run through the pipe.  This will typically be your
     #executable set up to work with MOEAframework, and associated arguments.  Specifically here
     #we are working with the LRGV problem.
@@ -36,10 +54,11 @@ def main():
 
     #Use popen to open a child process.  The standard in, out, and error are sent through a pipe.
     child = Popen(cmd, cwd='//home//joka0958//re-evaluator_2013-04-05//', bufsize=LINE_BUFFERED, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-
-    #The current version of the model spits out some lines to the console when it initializes them.
     #When using this python child process, we need to intentionally send and receive all output (i.e. it doesn't
-    #automatically do it for us.  Here there are 3 initialization lines to catch:
+    #automatically do it for us.
+    
+    #Check whether the current version of the model spits out lines to the console when initializing.
+    #When some debug output is turned off, this doesn't occur -- so comment out these lines if appropriate.
     print "Reading initializer lines."
     for i in range(0,3):
        line = child.stdout.readline()
@@ -51,8 +70,7 @@ def main():
     #Now we want to step through an existing Borg output file, which already contains decision variables and objectives.
     #We are going to step through each line, read in the decision variables from the file, and then evaluate those decision
     #variables in our external program.
-    myFilename = "AllDecAllExperimentData.txt"
-    fp = open(myFilename, 'rb')
+    fp = open(inputFilename, 'rb')
     for line in fp:
         if "#" in line:
             #This "if" statement is helpful if you want to preserve the generation separators and header lines that appeared
