@@ -24,12 +24,13 @@ from subprocess import PIPE
 LINE_BUFFERED = 1
 
 def cli():
-    if len(sys.argv) != 3:
-        sys.stderr.write("Arguments: problem, seed\n")
+    if len(sys.argv) != 4:
+        sys.stderr.write("Arguments: algorithm, problem, seed\n")
         sys.exit()
     args = {}
-    args["problem"] = sys.argv[1]
-    args["seed"] = sys.argv[2] 
+    args["algorithm"] = sys.argv[1]
+    args["problem"] = sys.argv[2]
+    args["seed"] = sys.argv[3] 
     return args
         
 def main():
@@ -37,20 +38,28 @@ def main():
     #Two command line arguments are the problem and the seed.  Each of the lower
     #dimensional problems is being re-evaluated with the AllDecAll objectives.
     args = cli()
+    algorithm = args["algorithm"]
     problem = args["problem"]
     seed = args["seed"]
     
     #Input and output filenames.
-    inputFilename = problem + '_s' + seed + '.noDV.txt'
-    outputFilename = problem + '_s' + seed + '.noDV.re-evaluated.txt'
+    inputFilename = './' + algorithm + '/' + problem + '_s' + seed + '.txt'
+    outputFilename = './' + algorithm + '/' + problem + '_s' + seed + '.re-evaluated.txt'
     
     #Define the command that you would like to run through the pipe.  This will typically be your
     #executable set up to work with MOEAframework, and associated arguments.  Specifically here
     #we are working with the LRGV problem.
-    cmd = ['./lrgvForMOEAFramework',  '-m', 'std-io', '-c', 'combined', '-b', 'AllDecAll']
+    if problem == "AllDecCostRel":
+        newProblem = "AllDecAll"
+    elif problem == "LowDecCostRel":
+        newProblem = "LowDecAll"
+    else:
+        print "Error, problem not recognized! You said %s" % problem
+    
+    cmd = ['./lrgvForMOEAFramework',  '-m', 'std-io', '-c', 'combined', '-b', newProblem]
 
     #Verify the command
-    print "The command to run is: %s" % cmd
+    #print "The command to run is: %s" % cmd
 
     #Use popen to open a child process.  The standard in, out, and error are sent through a pipe.
     child = Popen(cmd, cwd='//home//joka0958//re-evaluator_2013-04-05//', bufsize=LINE_BUFFERED, stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -59,44 +68,66 @@ def main():
     
     #Check whether the current version of the model spits out lines to the console when initializing.
     #When some debug output is turned off, this doesn't occur -- so comment out these lines if appropriate.
-    print "Reading initializer lines."
+    #print "Reading initializer lines."
     for i in range(0,3):
-       line = child.stdout.readline()
-       if line:
-         print line
-       else:
-         raise Exception("Evaluator died!")
+        line = child.stdout.readline()
+        if line:
+            pass
+            #print line
+        else:
+            raise Exception("Evaluator died!")
 
     #Now we want to step through an existing Borg output file, which already contains decision variables and objectives.
     #We are going to step through each line, read in the decision variables from the file, and then evaluate those decision
     #variables in our external program.
-    fp = open(inputFilename, 'rb')
-    for line in fp:
+    inStream = open(inputFilename, 'rb')
+    outStream = open(outputFilename, 'w')
+    for line in inStream:
         if "#" in line:
             #This "if" statement is helpful if you want to preserve the generation separators and header lines that appeared
             #in the original file.
-            print line
+            #print "Generation separator!"
+            outStream.write(line)
         else:
             #Read in all the variables on the line (this is both decisions and objectives)
             allVariables = [float(xx) for xx in re.split("[ ,\t]", line.strip())]
 
             #Only keep what you want
-            variables = allVariables[0:8]
-
+            if problem == "AllDecCostRel":
+                variables = allVariables[0:8]
+            elif problem == "LowDecCostRel":
+                variables = allVariables[0:3]
+            else:
+                print "Error! Problem not specified, you said %s" % problem
+            
             #We want to send the decision variables, separated by a space, and terminated by a newline character
-            decvarsAsString = '%f %f %f %f %f %f %f %f\n' % (variables[0], variables[1], variables[2], variables[3], variables[4], variables[5], variables[6], variables[7])
-
+            decvarsAsString = " ".join(str(x) for x in variables) + "\n"
+            #print "Wrapping the decision variables resulted in:"
+            #print decvarsAsString
+            
             #We send that string to the child process and catch the result.
-            print "Sending to process"
+            #print "Sending to process"
             child.stdin.write(decvarsAsString)
             child.stdin.flush() #you flush, so that the program knows the line was sent
 
             #Now obtain the program's result
-            print "Result:"
+            #print "Result:"
             outputLine = child.stdout.readline()
-            print outputLine
+            #print outputLine
 
-            #Since this is in a loop, it will operate for every line in the input file.
+            #Just like processing our input file, we are taking the line from standard out,
+            #and converting it into individual floating point numbers.  Of those numbers,
+            #we are taking the first six (i.e. we are throwing away the constraint violations)
+            outputVariables = [float(xx) for xx in re.split("[ ,\t]", outputLine.strip())]
+            objectives = outputVariables[0:6]
+            
+            #Finally, re-format the output to place in the output file.  We need the decision variables, and then the
+            #objective function values.
+            outputString = (" ".join(str(x) for x in variables)
+                + " "
+                + " ".join(str(y) for y in objectives)
+                + "\n")
+            outStream.write(outputString)
 
 if __name__ == "__main__":
     main()
