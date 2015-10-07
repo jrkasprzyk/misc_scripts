@@ -54,6 +54,9 @@ def construct_system_command(borgExecutableName, resultFileName, seed, nfe, obje
     # The run duration
     systemCommand = systemCommand + " -n %d " % nfe
 
+    # Constraints
+    systemCommand = systemCommand + " -c %d " % numConstraints	
+	
     # Objectives (two parts)
 
     # Objectives Part 1: The number of objectives
